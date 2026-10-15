@@ -27,6 +27,15 @@ npm run dev        # http://localhost:3000
 | `DUPR_API_BASE` | `https://api.dupr.gg` | DUPR API 位址 |
 | `BATCH_LIMIT` | `50` | 單次查詢上限 |
 
+## 部署到 Firebase App Hosting
+
+專案已附 `apphosting.yaml`。需要 Firebase 專案啟用 Blaze（用量計費）方案；閒置時會縮到 0 台，小量使用通常落在免費額度內。
+
+1. 到 [Firebase Console](https://console.firebase.google.com/) 建立專案，升級為 Blaze 方案。
+2. 左側選單 **Build → App Hosting → Get started**。
+3. 連結 GitHub，選 repo `charlesstw/MyDUPR`，根目錄填 `/`，live branch 選要部署的分支（例如 `main`）。
+4. 建立後會自動 build 並給一個 `https://<backend>--<project>.<region>.hosted.app` 網址；之後 push 到該分支就會自動重新部署。
+
 ## 開發
 
 ```bash

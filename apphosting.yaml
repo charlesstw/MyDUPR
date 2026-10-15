@@ -1,0 +1,12 @@
+# Firebase App Hosting config. https://firebase.google.com/docs/app-hosting/configure
+runConfig:
+  minInstances: 0   # scale to zero when idle, so it costs nothing without traffic
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+# Optional overrides (see .env.example):
+# env:
+#   - variable: BATCH_LIMIT
+#     value: "50"
