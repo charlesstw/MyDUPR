@@ -50,25 +50,28 @@ async function call(url, init) {
 
 let token = null;
 let base = null;
+// One login attempt per base: each attempt may email a new verification code.
 for (const b of BASES) {
-  for (const path of ["/auth/v1.0/login/", "/auth/v1.0/login"]) {
-    const r = await call(b + path, { method: "POST", body: JSON.stringify({ email, password }) });
-    console.log(`\nPOST ${b}${path} -> ${r.status}${r.error ? ` (${r.error})` : ""}`);
-    if (r.body) {
-      console.log(`  top-level keys: ${keys(r.body)}`);
-      if (r.body.result) console.log(`  result keys:    ${keys(r.body.result)}`);
-      if (r.body.message) console.log(`  message:        ${r.body.message}`);
-    } else if (r.text) {
-      console.log(`  body (non-JSON): ${r.text.slice(0, 120).replace(/\s+/g, " ")}`);
+  const r = await call(`${b}/auth/v1.0/login/`, { method: "POST", body: JSON.stringify({ email, password }) });
+  console.log(`\nPOST ${b}/auth/v1.0/login/ -> ${r.status}${r.error ? ` (${r.error})` : ""}`);
+  if (r.status === "network error") continue;
+  if (r.body) {
+    console.log(`  top-level keys: ${keys(r.body)}`);
+    if (r.body.result) console.log(`  result keys:    ${keys(r.body.result)}`);
+    // Non-secret hint fields, printed in full; challengeToken is never printed.
+    for (const k of ["status", "message", "errorCode", "requiredActions", "twoFactorMethods", "defaultMethod", "requirements"]) {
+      if (r.body[k] !== undefined) console.log(`  ${k}: ${JSON.stringify(r.body[k])}`);
     }
-    const t = r.body?.result?.accessToken ?? r.body?.result?.token ?? r.body?.accessToken;
-    if (r.status === 200 && t) {
-      token = t;
-      base = b;
-      break;
-    }
+    if (r.body.challengeToken) console.log(`  challengeToken: <${typeof r.body.challengeToken}, ${String(r.body.challengeToken).length} chars>`);
+  } else if (r.text) {
+    console.log(`  body (non-JSON): ${r.text.slice(0, 120).replace(/\s+/g, " ")}`);
   }
-  if (token) break;
+  const t = r.body?.result?.accessToken ?? r.body?.result?.token ?? r.body?.accessToken;
+  if (r.status === 200 && t) {
+    token = t;
+    base = b;
+  }
+  break;
 }
 
 if (!token) {
