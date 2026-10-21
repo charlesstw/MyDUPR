@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const r = await login(email.trim(), password);
     if (r.kind === "challenge") {
-      await setChallenge(r.challengeToken, r.method);
+      await setChallenge(r.challengeToken);
       return NextResponse.json({ needsCode: true, message: r.message });
     }
     await clearChallenge();

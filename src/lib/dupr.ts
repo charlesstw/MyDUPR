@@ -73,7 +73,7 @@ async function send(
 
 export type LoginResult =
   | { kind: "ok"; accessToken: string; fullName: string | null }
-  | { kind: "challenge"; challengeToken: string; method: string | null; message: string };
+  | { kind: "challenge"; challengeToken: string; message: string };
 
 function sessionFrom(body: any, headers: Headers): LoginResult & { kind: "ok" } {
   const result = body?.result ?? body ?? {};
@@ -104,7 +104,6 @@ export async function login(email: string, password: string): Promise<LoginResul
       return {
         kind: "challenge",
         challengeToken: err.body.challengeToken,
-        method: err.body.defaultMethod ?? null,
         message: err.body.message ?? "請輸入 DUPR 寄到你 Email 的 6 位數驗證碼",
       };
     }
@@ -112,10 +111,10 @@ export async function login(email: string, password: string): Promise<LoginResul
   }
 }
 
-export async function verify2fa(challengeToken: string, code: string, method: string | null) {
+export async function verify2fa(challengeToken: string, code: string) {
   const { body, headers } = await send("/auth/v1.0/2fa/verify", {
     method: "POST",
-    body: JSON.stringify({ challengeToken, code, ...(method ? { method } : {}) }),
+    body: JSON.stringify({ challengeToken, code }),
   });
   return sessionFrom(body, headers);
 }

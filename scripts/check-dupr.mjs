@@ -74,12 +74,7 @@ let token = login.status === 200 ? tokenOf(login) : null;
 
 if (!token && login.status === 428 && login.body?.challengeToken) {
   const code = await ask("\n請輸入 Email 收到的 6 位數驗證碼: ");
-  const method = login.body.defaultMethod;
-  const v = await call("/auth/v1.0/2fa/verify", {
-    challengeToken: login.body.challengeToken,
-    code,
-    ...(method ? { method } : {}),
-  });
+  const v = await call("/auth/v1.0/2fa/verify", { challengeToken: login.body.challengeToken, code });
   report(`POST ${BASE}/auth/v1.0/2fa/verify`, v);
   if (v.status === 200) token = tokenOf(v);
 }

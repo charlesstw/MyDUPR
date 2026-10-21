@@ -36,8 +36,8 @@ export async function clearSession() {
 // Pending 2FA challenge between the password step and the code step.
 const CHALLENGE_COOKIE = "dupr_challenge";
 
-export async function setChallenge(challengeToken: string, method: string | null) {
-  (await cookies()).set(CHALLENGE_COOKIE, JSON.stringify({ challengeToken, method }), {
+export async function setChallenge(challengeToken: string) {
+  (await cookies()).set(CHALLENGE_COOKIE, challengeToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
@@ -46,13 +46,8 @@ export async function setChallenge(challengeToken: string, method: string | null
   });
 }
 
-export async function getChallenge(): Promise<{ challengeToken: string; method: string | null } | null> {
-  const raw = (await cookies()).get(CHALLENGE_COOKIE)?.value;
-  try {
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+export async function getChallenge(): Promise<string | null> {
+  return (await cookies()).get(CHALLENGE_COOKIE)?.value ?? null;
 }
 
 export async function clearChallenge() {

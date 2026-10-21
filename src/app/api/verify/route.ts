@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!challenge) return NextResponse.json({ error: "驗證已逾時，請重新登入" }, { status: 401 });
 
   try {
-    const r = await verify2fa(challenge.challengeToken, clean, challenge.method);
+    const r = await verify2fa(challenge, clean);
     await clearChallenge();
     await setSession(r.accessToken, r.fullName);
     return NextResponse.json({ loggedIn: true, name: r.fullName });
