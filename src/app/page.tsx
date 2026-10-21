@@ -59,22 +59,28 @@ export default function Home() {
 function Login({ onLogin }: { onLogin: (name: string | null) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  // Set once DUPR asks for the emailed 6-digit code.
+  const [codeMessage, setCodeMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function post(url: string, body: object) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "登入失敗");
+    return data;
+  }
+
+  async function run(action: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "登入失敗");
-      onLogin(data.name ?? null);
+      await action();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -82,11 +88,72 @@ function Login({ onLogin }: { onLogin: (name: string | null) => void }) {
     }
   }
 
+  const sendPassword = () =>
+    run(async () => {
+      const data = await post("/api/login", { email, password });
+      if (data.needsCode) {
+        setCode("");
+        setCodeMessage(data.message);
+      } else onLogin(data.name ?? null);
+    });
+
+  const sendCode = () =>
+    run(async () => {
+      const data = await post("/api/verify", { code });
+      setPassword("");
+      onLogin(data.name ?? null);
+    });
+
+  if (codeMessage) {
+    return (
+      <form
+        className="card login"
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendCode();
+        }}
+      >
+        <h2>輸入驗證碼</h2>
+        <p className="muted">{codeMessage}</p>
+        <label>
+          6 位數驗證碼
+          <input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            pattern="\d{6}"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            autoFocus
+            required
+          />
+        </label>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" disabled={busy || code.length !== 6}>{busy ? "驗證中…" : "驗證並登入"}</button>
+        <div className="actions">
+          <button type="button" className="link" onClick={() => setCodeMessage(null)} disabled={busy}>
+            ← 返回
+          </button>
+          <button type="button" className="link" onClick={sendPassword} disabled={busy}>
+            重新寄送驗證碼
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
-    <form className="card login" onSubmit={submit}>
+    <form
+      className="card login"
+      onSubmit={(e) => {
+        e.preventDefault();
+        sendPassword();
+      }}
+    >
       <h2>登入你的 DUPR 帳號</h2>
       <p className="muted">
-        查詢會以你自己的 DUPR 帳號身份進行。密碼只用來向 DUPR 換取登入權杖，不會被儲存。
+        查詢會以你自己的 DUPR 帳號身份進行。密碼只用來向 DUPR 換取登入權杖，不會被儲存。DUPR 會寄 6
+        位數驗證碼到你的 Email。
       </p>
       <label>
         Email

@@ -32,3 +32,29 @@ export async function clearSession() {
   jar.delete(COOKIE);
   jar.delete(NAME_COOKIE);
 }
+
+// Pending 2FA challenge between the password step and the code step.
+const CHALLENGE_COOKIE = "dupr_challenge";
+
+export async function setChallenge(challengeToken: string, method: string | null) {
+  (await cookies()).set(CHALLENGE_COOKIE, JSON.stringify({ challengeToken, method }), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 10 * 60,
+  });
+}
+
+export async function getChallenge(): Promise<{ challengeToken: string; method: string | null } | null> {
+  const raw = (await cookies()).get(CHALLENGE_COOKIE)?.value;
+  try {
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearChallenge() {
+  (await cookies()).delete(CHALLENGE_COOKIE);
+}

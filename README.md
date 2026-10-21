@@ -24,7 +24,7 @@ npm run dev        # http://localhost:3000
 
 | 變數 | 預設 | 說明 |
 |---|---|---|
-| `DUPR_API_BASE` | `https://api.dupr.gg` | DUPR API 位址 |
+| `DUPR_API_BASE` | `https://api.dupr.com` | DUPR API 位址 |
 | `BATCH_LIMIT` | `50` | 單次查詢上限 |
 
 ## 登入不了 DUPR？

@@ -1,24 +1,36 @@
 import type { Player } from "./types";
 
-// Unofficial DUPR API, the same one the DUPR web app uses.
-export const DUPR_API_BASE = (process.env.DUPR_API_BASE || "https://api.dupr.gg").replace(/\/$/, "");
+// Unofficial DUPR API, the same one dashboard.dupr.com uses.
+export const DUPR_API_BASE = (process.env.DUPR_API_BASE || "https://api.dupr.com").replace(/\/$/, "");
+// Since 2026 DUPR also returns the access token as this cookie after 2FA.
+const ACCESS_COOKIE = "__Host-dupr_at";
 
 const TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 2;
 
 export class DuprError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public body: any = null) {
     super(message);
   }
 }
 
 async function request(path: string, init: RequestInit & { token?: string } = {}): Promise<any> {
+  return (await send(path, init)).body;
+}
+
+async function send(
+  path: string,
+  init: RequestInit & { token?: string } = {},
+): Promise<{ body: any; headers: Headers }> {
   const { token, ...rest } = init;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    headers.Cookie = `${ACCESS_COOKIE}=${token}`;
+  }
 
   for (let attempt = 0; ; attempt++) {
     let res: Response;
@@ -53,29 +65,59 @@ async function request(path: string, init: RequestInit & { token?: string } = {}
       // Logged to the server console only; never includes request bodies (passwords).
       console.error(`[DUPR] ${rest.method ?? "GET"} ${path} -> ${res.status} ${text.slice(0, 300)}`);
       const msg = body?.message || body?.error || `DUPR 回應 ${res.status}`;
-      throw new DuprError(msg, res.status);
+      throw new DuprError(msg, res.status, body);
     }
-    return body;
+    return { body, headers: res.headers };
   }
 }
 
-export interface LoginResult {
-  accessToken: string;
-  fullName: string | null;
-}
+export type LoginResult =
+  | { kind: "ok"; accessToken: string; fullName: string | null }
+  | { kind: "challenge"; challengeToken: string; method: string | null; message: string };
 
-export async function login(email: string, password: string): Promise<LoginResult> {
-  const body = await request("/auth/v1.0/login/", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+function sessionFrom(body: any, headers: Headers): LoginResult & { kind: "ok" } {
   const result = body?.result ?? body ?? {};
-  const accessToken = result.accessToken ?? result.token;
+  const fromCookie = headers
+    .getSetCookie()
+    .map((c) => c.match(new RegExp(`^${ACCESS_COOKIE}=([^;]+)`))?.[1])
+    .find(Boolean);
+  const accessToken = result.accessToken ?? result.token ?? fromCookie;
   if (!accessToken) {
     console.error(`[DUPR] login response had no token; keys: ${Object.keys(result).join(", ")}`);
     throw new DuprError(body?.message || "DUPR 登入回應格式不符", 500);
   }
-  return { accessToken, fullName: result.user?.fullName ?? result.fullName ?? null };
+  const user = result.user ?? result;
+  const fullName = user.fullName ?? ([user.firstName, user.lastName].filter(Boolean).join(" ") || null);
+  return { kind: "ok", accessToken, fullName };
+}
+
+export async function login(email: string, password: string): Promise<LoginResult> {
+  try {
+    const { body, headers } = await send("/auth/v1.0/login/", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return sessionFrom(body, headers);
+  } catch (err) {
+    // 428 = DUPR wants a second factor (6-digit code emailed to the user).
+    if (err instanceof DuprError && err.status === 428 && err.body?.challengeToken) {
+      return {
+        kind: "challenge",
+        challengeToken: err.body.challengeToken,
+        method: err.body.defaultMethod ?? null,
+        message: err.body.message ?? "請輸入 DUPR 寄到你 Email 的 6 位數驗證碼",
+      };
+    }
+    throw err;
+  }
+}
+
+export async function verify2fa(challengeToken: string, code: string, method: string | null) {
+  const { body, headers } = await send("/auth/v1.0/2fa/verify", {
+    method: "POST",
+    body: JSON.stringify({ challengeToken, code, ...(method ? { method } : {}) }),
+  });
+  return sessionFrom(body, headers);
 }
 
 function rating(value: unknown): string | null {
