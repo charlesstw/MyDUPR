@@ -31,7 +31,10 @@ async function request(path: string, init: RequestInit & { token?: string } = {}
       });
     } catch (err) {
       if (attempt < MAX_RETRIES) continue;
-      throw new DuprError(`無法連線到 DUPR：${(err as Error).message}`, 502);
+      const cause = (err as any)?.cause?.code || (err as Error).message;
+      console.error(`[DUPR] ${rest.method ?? "GET"} ${path} -> network error: ${cause}`);
+      // status 0 = never got a response from DUPR
+      throw new DuprError(`無法連線到 DUPR（${cause}）`, 0);
     }
 
     // FRD 5: back off and retry on rate limiting.
@@ -41,8 +44,14 @@ async function request(path: string, init: RequestInit & { token?: string } = {}
       continue;
     }
 
-    const body = await res.json().catch(() => null);
+    const text = await res.text();
+    let body: any = null;
+    try {
+      body = JSON.parse(text);
+    } catch {}
     if (!res.ok) {
+      // Logged to the server console only; never includes request bodies (passwords).
+      console.error(`[DUPR] ${rest.method ?? "GET"} ${path} -> ${res.status} ${text.slice(0, 300)}`);
       const msg = body?.message || body?.error || `DUPR 回應 ${res.status}`;
       throw new DuprError(msg, res.status);
     }
@@ -60,10 +69,13 @@ export async function login(email: string, password: string): Promise<LoginResul
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  const result = body?.result ?? {};
-  const accessToken = result.accessToken;
-  if (!accessToken) throw new DuprError(body?.message || "登入失敗", 401);
-  return { accessToken, fullName: result.user?.fullName ?? null };
+  const result = body?.result ?? body ?? {};
+  const accessToken = result.accessToken ?? result.token;
+  if (!accessToken) {
+    console.error(`[DUPR] login response had no token; keys: ${Object.keys(result).join(", ")}`);
+    throw new DuprError(body?.message || "DUPR 登入回應格式不符", 500);
+  }
+  return { accessToken, fullName: result.user?.fullName ?? result.fullName ?? null };
 }
 
 function rating(value: unknown): string | null {

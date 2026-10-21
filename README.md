@@ -27,6 +27,15 @@ npm run dev        # http://localhost:3000
 | `DUPR_API_BASE` | `https://api.dupr.gg` | DUPR API 位址 |
 | `BATCH_LIMIT` | `50` | 單次查詢上限 |
 
+## 登入不了 DUPR？
+
+1. 網頁上的錯誤訊息現在會帶 DUPR 的回應碼；跑 `npm run dev` 的終端機也會印出 `[DUPR] ...` 開頭的詳細原因。
+2. 執行診斷工具，它會試登入與搜尋，只印出狀態碼與欄位名稱（不印密碼與 token）：
+   ```bash
+   npm run check-dupr
+   ```
+3. 若你的 DUPR 帳號是用 Google / Apple / Facebook 登入建立的，帳號沒有密碼，請先到 DUPR App 或官網用「忘記密碼」替該 Email 設定一組密碼。
+
 ## 部署到 Firebase App Hosting
 
 專案已附 `apphosting.yaml`。需要 Firebase 專案啟用 Blaze（用量計費）方案；閒置時會縮到 0 台，小量使用通常落在免費額度內。

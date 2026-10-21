@@ -12,8 +12,12 @@ export async function POST(req: Request) {
     await setSession(accessToken, fullName);
     return NextResponse.json({ loggedIn: true, name: fullName });
   } catch (err) {
-    const status = err instanceof DuprError && err.status < 500 ? 401 : 502;
-    const error = status === 401 ? "登入失敗，請確認 DUPR 帳號密碼" : "DUPR 連線異常，請稍後再試";
-    return NextResponse.json({ error }, { status });
+    const code = err instanceof DuprError ? err.status : -1;
+    const detail = (err as Error).message;
+    if (code === 400 || code === 401) {
+      return NextResponse.json({ error: `登入失敗，請確認 DUPR 帳號密碼（DUPR：${detail}）` }, { status: 401 });
+    }
+    const error = code === 0 ? detail : `DUPR 登入異常（${code > 0 ? `HTTP ${code}：` : ""}${detail}）`;
+    return NextResponse.json({ error }, { status: 502 });
   }
 }
