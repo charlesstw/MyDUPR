@@ -1,4 +1,4 @@
-import type { Player } from "./types";
+import type { Player, SearchResult } from "./types";
 
 // Unofficial DUPR API, the same one dashboard.dupr.com uses.
 export const DUPR_API_BASE = (process.env.DUPR_API_BASE || "https://api.dupr.com").replace(/\/$/, "");
@@ -153,6 +153,8 @@ export function toPlayer(raw: any): Player {
     doubles: rating(ratings.doubles),
     singles: rating(ratings.singles),
     location: raw?.shortAddress ?? raw?.formattedAddress ?? null,
+    gender: raw?.gender ?? null,
+    age: typeof raw?.age === "number" ? raw.age : null,
   };
 }
 
@@ -166,7 +168,7 @@ export async function getPlayer(token: string, id: string): Promise<Player | nul
   }
 }
 
-export async function searchPlayers(token: string, query: string, limit = 10): Promise<Player[]> {
+export async function searchPlayers(token: string, query: string, limit = 25): Promise<SearchResult> {
   const body = await request("/player/v1.0/search", {
     method: "POST",
     token,
@@ -180,5 +182,6 @@ export async function searchPlayers(token: string, query: string, limit = 10): P
     }),
   });
   const hits: any[] = body?.result?.hits ?? [];
-  return hits.map(toPlayer);
+  const total = Number(body?.result?.total);
+  return { hits: hits.map(toPlayer), total: Number.isFinite(total) ? total : null };
 }

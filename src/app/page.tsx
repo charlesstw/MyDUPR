@@ -251,10 +251,14 @@ function Lookup({ batchLimit, onExpired }: { batchLimit: number; onExpired: (rea
     <>
       <section className="card">
         <label htmlFor="entries">貼上名單（一行一位，可填姓名、DUPR ID 或數字 ID）</label>
+        <p className="muted">
+          同名的人很多時，最準的是填 DUPR ID（個人頁上 6 碼）；或在姓名後加地區縮小範圍，例如「Jane Smith (Taipei)」，地區要用
+          DUPR 上顯示的寫法。
+        </p>
         <textarea
           id="entries"
           rows={8}
-          placeholder={"John Doe\n0YVNWN\nJane Smith"}
+          placeholder={"John Doe\n0YVNWN\nJane Smith (Taipei)"}
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={running}
@@ -297,6 +301,7 @@ function Lookup({ batchLimit, onExpired }: { batchLimit: number; onExpired: (rea
                   <th>輸入內容</th>
                   <th>球員</th>
                   <th>DUPR ID</th>
+                  <th>地區</th>
                   <th className="num">雙打</th>
                   <th className="num">單打</th>
                   <th>狀態</th>
@@ -333,6 +338,7 @@ function Row({
         <td>{r.input}</td>
         <td>{p?.fullName ?? "—"}</td>
         <td>{p?.duprId ?? "—"}</td>
+        <td>{p?.location ?? "—"}</td>
         <td className="num">{p ? p.doubles ?? "NR" : "—"}</td>
         <td className="num">{p ? p.singles ?? "NR" : "—"}</td>
         <td>
@@ -341,23 +347,43 @@ function Row({
               請選擇（{r.candidates?.length}）{expanded ? "▲" : "▼"}
             </button>
           ) : (
-            <span className={`pill ${r.status}`} title={r.message}>
-              {r.status === "error" && r.message ? `查詢失敗：${r.message}` : STATUS_LABEL[r.status]}
-            </span>
+            <>
+              <span className={`pill ${r.status}`} title={r.message}>
+                {r.message && r.status !== "matched"
+                  ? r.status === "error"
+                    ? `查詢失敗：${r.message}`
+                    : r.message
+                  : STATUS_LABEL[r.status]}
+              </span>
+              {r.candidates && r.candidates.length > (p ? 1 : 0) && (
+                <button className="link" onClick={onToggle}>
+                  {p ? "換人" : `看同名的人（${r.candidates.length}）`}
+                  {expanded ? "▲" : "▼"}
+                </button>
+              )}
+            </>
           )}
         </td>
       </tr>
       {expanded && r.candidates && (
         <tr className="candidates">
-          <td colSpan={6}>
+          <td colSpan={7}>
             <ul>
               {r.candidates.map((c) => (
                 <li key={c.id}>
                   <button className="link" onClick={() => onChoose(c)}>
                     {c.fullName}
                   </button>
+                  {c.id === p?.id && <span className="muted">（目前選擇）</span>}
                   <span className="muted">
-                    {[c.duprId, c.location, `雙打 ${c.doubles ?? "NR"}`, `單打 ${c.singles ?? "NR"}`]
+                    {[
+                      c.duprId,
+                      c.location,
+                      c.gender,
+                      c.age != null ? `${c.age} 歲` : null,
+                      `雙打 ${c.doubles ?? "NR"}`,
+                      `單打 ${c.singles ?? "NR"}`,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -373,9 +399,17 @@ function Row({
 
 function exportCsv(results: LookupResult[]) {
   const esc = (v: string | null | undefined) => `"${(v ?? "").replace(/"/g, '""')}"`;
-  const header = ["輸入內容", "比對姓名", "DUPR ID", "雙打分數", "單打分數", "狀態"];
+  const header = ["輸入內容", "比對姓名", "DUPR ID", "地區", "雙打分數", "單打分數", "狀態"];
   const lines = results.map((r) =>
-    [r.input, r.player?.fullName, r.player?.duprId, r.player?.doubles, r.player?.singles, STATUS_LABEL[r.status]]
+    [
+      r.input,
+      r.player?.fullName,
+      r.player?.duprId,
+      r.player?.location,
+      r.player?.doubles,
+      r.player?.singles,
+      STATUS_LABEL[r.status],
+    ]
       .map(esc)
       .join(","),
   );
