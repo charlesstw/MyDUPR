@@ -14,22 +14,41 @@ export class DuprError extends Error {
   }
 }
 
+// How to present the token: DUPR has accepted a Bearer header historically, and
+// dashboard.dupr.com now uses the __Host-dupr_at cookie. Try one, fall back to the
+// other on 401, and remember whichever worked.
+type AuthMode = "bearer" | "cookie";
+let authMode: AuthMode = "bearer";
+
 async function request(path: string, init: RequestInit & { token?: string } = {}): Promise<any> {
-  return (await send(path, init)).body;
+  if (!init.token) return (await send(path, init)).body;
+  try {
+    return (await send(path, { ...init, auth: authMode })).body;
+  } catch (err) {
+    if (!(err instanceof DuprError && err.status === 401)) throw err;
+    const other: AuthMode = authMode === "bearer" ? "cookie" : "bearer";
+    const body = (await send(path, { ...init, auth: other })).body;
+    console.log(`[DUPR] switched auth mode to ${other}`);
+    authMode = other;
+    return body;
+  }
 }
 
 async function send(
   path: string,
-  init: RequestInit & { token?: string } = {},
+  init: RequestInit & { token?: string; auth?: AuthMode } = {},
 ): Promise<{ body: any; headers: Headers }> {
-  const { token, ...rest } = init;
+  const { token, auth = "bearer", ...rest } = init;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (token && auth === "bearer") headers.Authorization = `Bearer ${token}`;
+  if (token && auth === "cookie") {
     headers.Cookie = `${ACCESS_COOKIE}=${token}`;
+    // Cookie-authenticated calls come from the dashboard origin in the browser.
+    headers.Origin = "https://dashboard.dupr.com";
+    headers.Referer = "https://dashboard.dupr.com/";
   }
 
   for (let attempt = 0; ; attempt++) {
@@ -63,7 +82,8 @@ async function send(
     } catch {}
     if (!res.ok) {
       // Logged to the server console only; never includes request bodies (passwords).
-      console.error(`[DUPR] ${rest.method ?? "GET"} ${path} -> ${res.status} ${text.slice(0, 300)}`);
+      const redacted = text.replace(/("(?:challengeToken|accessToken|refreshToken)"\s*:\s*")[^"]*/g, "$1…");
+      console.error(`[DUPR] ${rest.method ?? "GET"} ${path} -> ${res.status} ${redacted.slice(0, 300)}`);
       const msg = body?.message || body?.error || `DUPR 回應 ${res.status}`;
       throw new DuprError(msg, res.status, body);
     }

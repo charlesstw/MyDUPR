@@ -21,6 +21,8 @@ interface Me {
 
 export default function Home() {
   const [me, setMe] = useState<Me | null>(null);
+  // Why we were sent back to the login form, if a lookup was rejected.
+  const [loggedOutReason, setLoggedOutReason] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/me")
@@ -48,15 +50,27 @@ export default function Home() {
       {!me ? (
         <p className="muted">載入中…</p>
       ) : me.loggedIn ? (
-        <Lookup batchLimit={me.batchLimit} onExpired={() => setMe({ ...me, loggedIn: false, name: null })} />
+        <Lookup
+          batchLimit={me.batchLimit}
+          onExpired={(reason) => {
+            setLoggedOutReason(reason);
+            setMe({ ...me, loggedIn: false, name: null });
+          }}
+        />
       ) : (
-        <Login onLogin={(name) => setMe({ ...me, loggedIn: true, name })} />
+        <Login
+          notice={loggedOutReason}
+          onLogin={(name) => {
+            setLoggedOutReason(null);
+            setMe({ ...me, loggedIn: true, name });
+          }}
+        />
       )}
     </main>
   );
 }
 
-function Login({ onLogin }: { onLogin: (name: string | null) => void }) {
+function Login({ notice, onLogin }: { notice: string | null; onLogin: (name: string | null) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -155,6 +169,7 @@ function Login({ onLogin }: { onLogin: (name: string | null) => void }) {
         查詢會以你自己的 DUPR 帳號身份進行。密碼只用來向 DUPR 換取登入權杖，不會被儲存。DUPR 會寄 6
         位數驗證碼到你的 Email。
       </p>
+      {notice && <p className="error">{notice}</p>}
       <label>
         Email
         <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -175,7 +190,7 @@ function Login({ onLogin }: { onLogin: (name: string | null) => void }) {
   );
 }
 
-function Lookup({ batchLimit, onExpired }: { batchLimit: number; onExpired: () => void }) {
+function Lookup({ batchLimit, onExpired }: { batchLimit: number; onExpired: (reason: string) => void }) {
   const [text, setText] = useState("");
   const [results, setResults] = useState<LookupResult[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -213,7 +228,7 @@ function Lookup({ batchLimit, onExpired }: { batchLimit: number; onExpired: () =
         });
         const data = await res.json();
         if (res.status === 401) {
-          onExpired();
+          onExpired(data.error || "DUPR 登入已失效，請重新登入");
           return;
         }
         if (!res.ok) throw new Error(data.error || "查詢失敗");

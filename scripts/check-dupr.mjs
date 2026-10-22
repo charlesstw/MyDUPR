@@ -22,9 +22,15 @@ async function ask(prompt, hidden = false) {
 
 const keys = (o) => (o && typeof o === "object" ? Object.keys(o).join(", ") : String(o).slice(0, 80));
 
-async function call(path, body, token) {
+async function call(path, body, token, auth = "bearer") {
   const headers = { "Content-Type": "application/json", Accept: "application/json" };
-  if (token) Object.assign(headers, { Authorization: `Bearer ${token}`, Cookie: `${ACCESS_COOKIE}=${token}` });
+  if (token && auth === "bearer") headers.Authorization = `Bearer ${token}`;
+  if (token && auth === "cookie")
+    Object.assign(headers, {
+      Cookie: `${ACCESS_COOKIE}=${token}`,
+      Origin: "https://dashboard.dupr.com",
+      Referer: "https://dashboard.dupr.com/",
+    });
   try {
     const res = await fetch(BASE + path, {
       method: "POST",
@@ -86,22 +92,21 @@ if (!token) {
 }
 
 console.log("\n✅ 登入成功，測試搜尋…");
-const s = await call(
-  "/player/v1.0/search",
-  {
-    query: "smith",
-    limit: 2,
-    offset: 0,
-    exclude: [],
-    includeUnclaimedPlayers: true,
-    filter: { rating: { maxRating: null, minRating: null }, locationText: "" },
-  },
-  token,
-);
-report("POST /player/v1.0/search", s);
-const hit = s.body?.result?.hits?.[0];
-if (hit) {
-  console.log(`  hit keys: ${keys(hit)}`);
-  console.log(`  ratings:  ${JSON.stringify(hit.ratings)}`);
+const searchBody = {
+  query: "smith",
+  limit: 2,
+  offset: 0,
+  exclude: [],
+  includeUnclaimedPlayers: true,
+  filter: { rating: { maxRating: null, minRating: null }, locationText: "" },
+};
+for (const auth of ["bearer", "cookie"]) {
+  const s = await call("/player/v1.0/search", searchBody, token, auth);
+  report(`POST /player/v1.0/search [${auth}]`, s);
+  const hit = s.body?.result?.hits?.[0];
+  if (hit) {
+    console.log(`  hit keys: ${keys(hit)}`);
+    console.log(`  ratings:  ${JSON.stringify(hit.ratings)}`);
+  }
 }
 console.log("\n請把上面的輸出整段貼給 Claude（不含密碼與 token）。");

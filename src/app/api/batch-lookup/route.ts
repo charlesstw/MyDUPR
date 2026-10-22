@@ -26,7 +26,10 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof DuprError && err.status === 401) {
       await clearSession();
-      return NextResponse.json({ error: "DUPR 登入已過期，請重新登入" }, { status: 401 });
+      return NextResponse.json(
+        { error: `DUPR 拒絕了這次查詢，請重新登入（DUPR：${err.message}）` },
+        { status: 401 },
+      );
     }
     return NextResponse.json({ error: "DUPR 連線異常，請稍後再試" }, { status: 502 });
   }
