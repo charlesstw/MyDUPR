@@ -1,4 +1,10 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+
+// Secure cookies only over HTTPS (hosting proxies set x-forwarded-proto), so
+// `npm start` still works on http://localhost.
+async function secure() {
+  return (await headers()).get("x-forwarded-proto") === "https";
+}
 
 // The user's own DUPR access token lives only in an httpOnly cookie:
 // page JavaScript can't read it, and the password is never stored.
@@ -18,7 +24,7 @@ export async function setSession(token: string, name: string | null) {
   const jar = await cookies();
   const opts = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await secure(),
     sameSite: "strict" as const,
     path: "/",
     maxAge: MAX_AGE,
@@ -39,7 +45,7 @@ const CHALLENGE_COOKIE = "dupr_challenge";
 export async function setChallenge(challengeToken: string) {
   (await cookies()).set(CHALLENGE_COOKIE, challengeToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await secure(),
     sameSite: "strict",
     path: "/",
     maxAge: 10 * 60,
